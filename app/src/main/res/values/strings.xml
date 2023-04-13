@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Coltraco</string>
+    <string name="errorMessage">Please enter a valid name.</string>
+    <string name="nameEnter">Enter Your Name</string>
+    <string name="nameType">Type your name</string>
+    <string name="personIconDesc">Person Icon</string>
+    <string name="buttonLabel">Say Hello</string>
+</resources>
