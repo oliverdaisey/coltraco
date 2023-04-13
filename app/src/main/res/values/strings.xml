@@ -5,4 +5,10 @@
     <string name="nameType">Type your name</string>
     <string name="personIconDesc">Person Icon</string>
     <string name="buttonLabel">Say Hello</string>
+    <string name="day">Day</string>
+    <string name="dayFormat">DD</string>
+    <string name="month">Month</string>
+    <string name="monthFormat">MM</string>
+    <string name="year">Year</string>
+    <string name="yearFormat">YYYY</string>
 </resources>
