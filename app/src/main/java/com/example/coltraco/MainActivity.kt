@@ -21,20 +21,43 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.room.ColumnInfo
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Delete
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.example.coltraco.ui.theme.ColtracoTheme
-import com.example.coltraco.calculateAge
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+
+            // Initialize database instance
+            val db = Room.databaseBuilder(
+                applicationContext,
+                AppDatabase::class.java,
+                "users-db"
+            ).build()
+
+            // Get the UserDao instance from the database
+            val userDao = db.userDao()
+
             ColtracoTheme {
                 // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                    BasicUI()
+                    BasicUI(userDao)
                 }
             }
         }
@@ -42,7 +65,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BasicUI() {
+fun BasicUI(userDao: UserDao) {
 
     // state variables
     var name by remember { mutableStateOf("") }
@@ -51,6 +74,7 @@ fun BasicUI() {
     var showHelloMessage by remember { mutableStateOf(false) }
     val isValidName = name.length >= 2
             && name.matches(Regex("^[a-zA-Z\\s]*$"))
+    val isValidAge = true
     val focusManager = LocalFocusManager.current
 
     // UI layout
@@ -106,6 +130,7 @@ fun BasicUI() {
         var day by remember { mutableStateOf("") }
         var month by remember { mutableStateOf("") }
         var year by remember { mutableStateOf("") }
+        var age by remember { mutableStateOf(-1) }
 
         Text(
             text = "Enter your date of birth:",
@@ -127,8 +152,10 @@ fun BasicUI() {
         Button(
             onClick = {
                 isButtonClicked = true
-                if (isValidName) { nameDisplay = name
-                    showHelloMessage = true }
+                if (isValidName && isValidAge) { nameDisplay = name
+                    age = calculateAge(day.toInt(), month.toInt(), year.toInt())
+                    showHelloMessage = true
+                }
             },
             enabled = name.isNotBlank()
         ) {
@@ -137,10 +164,14 @@ fun BasicUI() {
 
         // show the "Hello" message if name input is valid
         if (showHelloMessage) {
-            Text(text = "Hello, ${nameDisplay}! You are " +
-                    "${calculateAge(day.toInt(), month.toInt(), year.toInt())} " +
-                    "years old. You were born in ${year}.",
+            Text(text = "Hello, $nameDisplay! You are $age years old." +
+                    " You were born in ${year}.",
                 modifier = Modifier.padding(top = 8.dp))
+            // insert into database
+            val user = User(name = name, age = age, birthMonth = month, birthYear = year)
+            LaunchedEffect(userDao) {
+                userDao.insertUser(user)
+            }
         }
 
     }
@@ -246,10 +277,39 @@ fun DateOfBirthFields(onDateEntered: (Int, Int, Int) -> Unit) {
 
 
 
-@Composable
-@Preview(showBackground = true)
-fun PreviewUI() {
-    ColtracoTheme {
-        BasicUI()
-    }
+//@Composable
+//@Preview(showBackground = true)
+//fun PreviewUI() {
+//    ColtracoTheme {
+//        BasicUI()
+//    }
+//}
+
+@Entity
+data class User(
+    @PrimaryKey(autoGenerate = true) val uid: Int = 0,
+    @ColumnInfo(name = "name") val name: String?,
+    @ColumnInfo(name = "age") val age: Int,
+    @ColumnInfo(name = "birth_year") val birthYear: String?,
+    @ColumnInfo(name = "birth_month") val birthMonth: String?
+)
+
+@Dao
+interface UserDao {
+    @Query("SELECT * FROM user")
+    fun getAll(): List<User>
+
+    @Query("SELECT * FROM user WHERE uid IN (:userIds)")
+    fun loadAllByIds(userIds: IntArray): List<User>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUser(user: User)
+
+    @Delete
+    fun delete(user: User)
+}
+
+@Database(entities = [User::class], version = 1)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun userDao(): UserDao
 }
