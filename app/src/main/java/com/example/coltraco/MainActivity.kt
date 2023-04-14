@@ -19,21 +19,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.room.ColumnInfo
-import androidx.room.Dao
-import androidx.room.Database
-import androidx.room.Delete
-import androidx.room.Entity
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.PrimaryKey
-import androidx.room.Query
 import androidx.room.Room
-import androidx.room.RoomDatabase
 import com.example.coltraco.ui.theme.ColtracoTheme
-import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -64,6 +52,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// TO DO: Refactor business logic w/ ViewModel
 @Composable
 fun BasicUI(userDao: UserDao) {
 
@@ -72,18 +61,24 @@ fun BasicUI(userDao: UserDao) {
     var nameDisplay by remember { mutableStateOf("") }
     var isButtonClicked by remember { mutableStateOf(false) }
     var showHelloMessage by remember { mutableStateOf(false) }
+    var isValidDate by remember { mutableStateOf(true) }
+    // check name against regular expression for validity
     val isValidName = name.length >= 2
             && name.matches(Regex("^[a-zA-Z\\s]*$"))
-    val isValidAge = true
     val focusManager = LocalFocusManager.current
+    // refactor this into a ViewModel object
+    var users by remember { mutableStateOf<List<User>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+    val isDatabaseNotEmpty = remember(users) { users.isNotEmpty() }
 
     // UI layout
-    Column(modifier = Modifier.fillMaxSize()
+    Column(modifier = Modifier
+        .fillMaxSize()
         .padding(horizontal = 30.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center) {
 
-        // error message
+        // error message for name
         if (isButtonClicked && !isValidName) {
             Text(
                 text = stringResource(R.string.errorMessage),
@@ -138,6 +133,16 @@ fun BasicUI(userDao: UserDao) {
             modifier = Modifier.padding(vertical = 8.dp)
         )
 
+        // error message for dob
+        if (!isValidDate) {
+            Text(
+                text = stringResource(R.string.errorMessageDate),
+                color = Color.Red,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            showHelloMessage = false
+        }
+
         DateOfBirthFields(
             onDateEntered = { enteredDay, enteredMonth, enteredYear ->
                 day = enteredDay.toString().padStart(2, '0')
@@ -152,7 +157,9 @@ fun BasicUI(userDao: UserDao) {
         Button(
             onClick = {
                 isButtonClicked = true
-                if (isValidName && isValidAge) { nameDisplay = name
+                isValidDate = isDateValid(day.toInt(), month.toInt(), year.toInt()) &&
+                        isDateBeforeToday(day.toInt(), month.toInt(), year.toInt())
+                if (isValidName && isValidDate) { nameDisplay = name
                     age = calculateAge(day.toInt(), month.toInt(), year.toInt())
                     showHelloMessage = true
                 }
@@ -169,10 +176,47 @@ fun BasicUI(userDao: UserDao) {
                 modifier = Modifier.padding(top = 8.dp))
             // insert into database
             val user = User(name = name, age = age, birthMonth = month, birthYear = year)
-            LaunchedEffect(userDao) {
+
+            // coroutines could be factored into a ViewModel object?
+            coroutineScope.launch {
                 userDao.insertUser(user)
+                // users = userDao.getAll()
+            }
+            // considered "incorrect" usage of LaunchedEffect...
+//            LaunchedEffect(userDao) {
+//                userDao.insertUser(user)
+//                users = userDao.getAll()
+//            }
+        }
+
+        // Database interaction buttons
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+
+            // View users button
+            Button(
+                onClick = {
+                    // TO DO: show users
+                },
+                enabled = isDatabaseNotEmpty,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text(text = "View Users")
+            }
+
+            // Clear users button
+            Button(
+                onClick = {
+                    // TO DO: clear users
+                },
+                enabled = isDatabaseNotEmpty,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text(text = "Clear Users")
             }
         }
+
+
 
     }
 }
@@ -235,7 +279,8 @@ fun DateOfBirthFields(onDateEntered: (Int, Int, Int) -> Unit) {
                     // move to year focus
                     yearFocusRequester.requestFocus()
                 } ),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
                 .focusRequester(monthFocusRequester)
 
         )
@@ -261,7 +306,8 @@ fun DateOfBirthFields(onDateEntered: (Int, Int, Int) -> Unit) {
                     // close the keyboard
                     focusManager.clearFocus()
                 } ),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
                 .focusRequester(yearFocusRequester)
         )
     }
@@ -272,44 +318,4 @@ fun DateOfBirthFields(onDateEntered: (Int, Int, Int) -> Unit) {
             onDateEntered(day.toInt(), month.toInt(), year.toInt())
         }
     }
-}
-
-
-
-
-//@Composable
-//@Preview(showBackground = true)
-//fun PreviewUI() {
-//    ColtracoTheme {
-//        BasicUI()
-//    }
-//}
-
-@Entity
-data class User(
-    @PrimaryKey(autoGenerate = true) val uid: Int = 0,
-    @ColumnInfo(name = "name") val name: String?,
-    @ColumnInfo(name = "age") val age: Int,
-    @ColumnInfo(name = "birth_year") val birthYear: String?,
-    @ColumnInfo(name = "birth_month") val birthMonth: String?
-)
-
-@Dao
-interface UserDao {
-    @Query("SELECT * FROM user")
-    fun getAll(): List<User>
-
-    @Query("SELECT * FROM user WHERE uid IN (:userIds)")
-    fun loadAllByIds(userIds: IntArray): List<User>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUser(user: User)
-
-    @Delete
-    fun delete(user: User)
-}
-
-@Database(entities = [User::class], version = 1)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun userDao(): UserDao
 }

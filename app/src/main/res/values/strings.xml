@@ -11,4 +11,5 @@
     <string name="monthFormat">MM</string>
     <string name="year">Year</string>
     <string name="yearFormat">YYYY</string>
+    <string name="errorMessageDate">Invalid date</string>
 </resources>
